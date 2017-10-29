@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.9.4)
 project(White)
 
-set(paho-mqtt3_DIR .)
-set(paho-mqttpp3_DIR .)
-find_package(paho-mqtt3 REQUIRED)
-find_package(paho-mqttpp3 REQUIRED)
+include(thirdparty/websocketpp/build/lib/cmake/websocketpp/websocketpp-config.cmake)
+find_package(websocketpp REQUIRED)
 
-include_directories(${paho-mqtt3_INCLUDE_DIRS})
-include_directories(${paho-mqttpp3_INCLUDE_DIRS})
+set(ASIO_INCLUDE_DIR thirdparty/asio/asio/include)
 
-add_executable(White main.cpp)
-target_link_libraries(White ${paho-mqtt3_LIBRARY} ${paho-mqttpp3_LIBRARY})
+include_directories(${WEBSOCKETPP_INCLUDE_DIR})
+include_directories(${ASIO_INCLUDE_DIR})
 
+add_executable(White src/main.cpp)
+
+target_compile_definitions(White PUBLIC ASIO_STANDALONE=TRUE)
 set_property(TARGET White PROPERTY CXX_STANDARD 17)

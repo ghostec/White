@@ -1,176 +1,69 @@
 #include <iostream>
-#include <cstdlib>
-#include <string>
-#include <thread>	// For sleep
-#include <atomic>
-#include <chrono>
-#include <cstring>
-#include "mqtt/async_client.h"
 
-using namespace std;
+#include "asio.hpp"
 
-const std::string DFLT_SERVER_ADDRESS	{ "tcp://localhost:1883" };
-const std::string DFLT_CLIENT_ID		{ "async_publish" };
+#include <websocketpp/config/asio_no_tls.hpp>
 
-const string TOPIC { "hello" };
+#include <websocketpp/server.hpp>
 
-const char* PAYLOAD1 = "Hello World!";
-const char* PAYLOAD2 = "Hi there!";
-const char* PAYLOAD3 = "Is anyone listening?";
-const char* PAYLOAD4 = "Someone is always listening.";
+#include <iostream>
 
-const char* LWT_PAYLOAD = "Last will and testament.";
+typedef websocketpp::server<websocketpp::config::asio> server;
 
-const int  QOS = 1;
+using websocketpp::lib::placeholders::_1;
+using websocketpp::lib::placeholders::_2;
+using websocketpp::lib::bind;
 
-const auto TIMEOUT = std::chrono::seconds(10);
+// pull out the type of messages sent by our config
+typedef server::message_ptr message_ptr;
 
-/////////////////////////////////////////////////////////////////////////////
+// Define a callback to handle incoming messages
+void on_message(server* s, websocketpp::connection_hdl hdl, message_ptr msg) {
+  std::cout << "on_message called with hdl: " << hdl.lock().get()
+    << " and message: " << msg->get_payload()
+    << std::endl;
 
-/**
- * A callback class for use with the main MQTT client.
- */
-class callback : public virtual mqtt::callback
-{
-public:
-	void connection_lost(const string& cause) override {
-		cout << "\nConnection lost" << endl;
-		if (!cause.empty())
-			cout << "\tcause: " << cause << endl;
-	}
+  // check for a special command to instruct the server to stop listening so
+  // it can be cleanly exited.
+  if (msg->get_payload() == "stop-listening") {
+    s->stop_listening();
+    return;
+  }
 
-	void delivery_complete(mqtt::delivery_token_ptr tok) override {
-		cout << "\tDelivery complete for token: "
-			<< (tok ? tok->get_message_id() : -1) << endl;
-	}
-};
+  try {
+    s->send(hdl, msg->get_payload(), msg->get_opcode());
+  } catch (const websocketpp::lib::error_code& e) {
+    std::cout << "Echo failed because: " << e
+      << "(" << e.message() << ")" << std::endl;
+  }
+}
 
-/////////////////////////////////////////////////////////////////////////////
+int main() {
+  // Create a server endpoint
+  server echo_server;
 
-/**
- * A base action listener.
- */
-class action_listener : public virtual mqtt::iaction_listener
-{
-protected:
-	void on_failure(const mqtt::token& tok) override {
-		cout << "\tListener failure for token: "
-			<< tok.get_message_id() << endl;
-	}
+  try {
+    // Set logging settings
+    echo_server.set_access_channels(websocketpp::log::alevel::all);
+    echo_server.clear_access_channels(websocketpp::log::alevel::frame_payload);
 
-	void on_success(const mqtt::token& tok) override {
-		cout << "\tListener success for token: "
-			<< tok.get_message_id() << endl;
-	}
-};
+    // Initialize Asio
+    echo_server.init_asio();
 
-/////////////////////////////////////////////////////////////////////////////
+    // Register our message handler
+    echo_server.set_message_handler(bind(&on_message,&echo_server,::_1,::_2));
 
-/**
- * A derived action listener for publish events.
- */
-class delivery_action_listener : public action_listener
-{
-	atomic<bool> done_;
+    // Listen on port 9002
+    echo_server.listen(9002);
 
-	void on_failure(const mqtt::token& tok) override {
-		action_listener::on_failure(tok);
-		done_ = true;
-	}
+    // Start the server accept loop
+    echo_server.start_accept();
 
-	void on_success(const mqtt::token& tok) override {
-		action_listener::on_success(tok);
-		done_ = true;
-	}
-
-public:
-	delivery_action_listener() : done_(false) {}
-	bool is_done() const { return done_; }
-};
-
-/////////////////////////////////////////////////////////////////////////////
-
-int main(int argc, char* argv[])
-{
-	string	address  = (argc > 1) ? string(argv[1]) : DFLT_SERVER_ADDRESS,
-			clientID = (argc > 2) ? string(argv[2]) : DFLT_CLIENT_ID;
-
-	cout << "Initializing for server '" << address << "'..." << endl;
-	mqtt::async_client client(address, clientID);
-
-	callback cb;
-	client.set_callback(cb);
-
-	mqtt::connect_options conopts;
-	mqtt::message willmsg(TOPIC, LWT_PAYLOAD, 1, true);
-	mqtt::will_options will(willmsg);
-	conopts.set_will(will);
-
-	cout << "  ...OK" << endl;
-
-	try {
-		cout << "\nConnecting..." << endl;
-		mqtt::token_ptr conntok = client.connect(conopts);
-		cout << "Waiting for the connection..." << endl;
-		conntok->wait();
-		cout << "  ...OK" << endl;
-
-		// First use a message pointer.
-
-		cout << "\nSending message..." << endl;
-		mqtt::message_ptr pubmsg = mqtt::make_message(TOPIC, PAYLOAD1);
-		pubmsg->set_qos(QOS);
-		client.publish(pubmsg)->wait_for(TIMEOUT);
-		cout << "  ...OK" << endl;
-
-		// Now try with itemized publish.
-
-		cout << "\nSending next message..." << endl;
-		mqtt::delivery_token_ptr pubtok;
-		pubtok = client.publish(TOPIC, PAYLOAD2, strlen(PAYLOAD2), QOS, false);
-		cout << "  ...with token: " << pubtok->get_message_id() << endl;
-		cout << "  ...for message with " << pubtok->get_message()->get_payload().size()
-			<< " bytes" << endl;
-		pubtok->wait_for(TIMEOUT);
-		cout << "  ...OK" << endl;
-
-		// Now try with a listener
-
-		cout << "\nSending next message..." << endl;
-		action_listener listener;
-		pubmsg = mqtt::make_message(TOPIC, PAYLOAD3);
-		pubtok = client.publish(pubmsg, nullptr, listener);
-		pubtok->wait();
-		cout << "  ...OK" << endl;
-
-		// Finally try with a listener, but no token
-
-		cout << "\nSending final message..." << endl;
-		delivery_action_listener deliveryListener;
-		pubmsg = mqtt::make_message(TOPIC, PAYLOAD4);
-		client.publish(pubmsg, nullptr, deliveryListener);
-
-		while (!deliveryListener.is_done()) {
-			this_thread::sleep_for(std::chrono::milliseconds(100));
-		}
-		cout << "OK" << endl;
-
-		// Double check that there are no pending tokens
-
-		auto toks = client.get_pending_delivery_tokens();
-		if (!toks.empty())
-			cout << "Error: There are pending delivery tokens!" << endl;
-
-		// Disconnect
-		cout << "\nDisconnecting..." << endl;
-		conntok = client.disconnect();
-		conntok->wait();
-		cout << "  ...OK" << endl;
-	}
-	catch (const mqtt::exception& exc) {
-		cerr << exc.what() << endl;
-		return 1;
-	}
-
- 	return 0;
+    // Start the ASIO io_service run loop
+    echo_server.run();
+  } catch (websocketpp::exception const & e) {
+    std::cout << e.what() << std::endl;
+  } catch (...) {
+    std::cout << "other exception" << std::endl;
+  }
 }
