@@ -3,8 +3,10 @@ project(White)
 
 find_package(Pistache REQUIRED)
 
-add_subdirectory(src)
+option(target "Which target to build" "worker")
 
-add_executable(White src/main.cpp)
-target_link_libraries(White pistache)
-set_property(TARGET White PROPERTY CXX_STANDARD 17)
+if(target STREQUAL "worker")
+  include(${CMAKE_CURRENT_SOURCE_DIR}/src/CMakeListsWorker.txt)
+elseif(target STREQUAL "server")
+  include(${CMAKE_CURRENT_SOURCE_DIR}/src/CMakeListsServer.txt)
+endif()
