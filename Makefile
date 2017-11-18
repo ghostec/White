@@ -1,17 +1,11 @@
-# Requires: git, ninja, cmake
+docker-build:
+	@docker build -t white .
 
-deps: common-deps; make -j2 clone-deps; make websocketpp
+docker-run:
+	@docker run -it --rm -v "$(PWD)":"/app" -p 9080:9080 -w /app white sh -c "make run"
 
-common-deps:
-	@rm -rf thirdparty
-	@mkdir thirdparty
+run:
+	@rm -rf build;	mkdir build; cd build; \
+		cmake ..; make; \
+		./White --port 9080
 
-clone-deps: clone-websocketpp clone-asio
-clone-websocketpp:
-	@cd thirdparty; git clone https://github.com/zaphoyd/websocketpp
-clone-asio:
-	@cd thirdparty; git clone https://github.com/chriskohlhoff/asio.git
-
-websocketpp:
-	@cd thirdparty/websocketpp; mkdir build; cd build; \
-		cmake -DCMAKE_INSTALL_PREFIX=./ ..; make install
