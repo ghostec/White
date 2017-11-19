@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cxxopts.hpp>
-#include <pistache/endpoint.h>
 #include "http/server.hpp"
 
 int main(int argc, char *argv[]) {
@@ -10,7 +9,7 @@ int main(int argc, char *argv[]) {
     ("p,port", "Port that the server will listen to", cxxopts::value<int>())
     ;
 
-  auto result = options.parse(argc, argv);
+  const auto result = options.parse(argc, argv);
   if (result.count("help")) {
     std::cout << options.help({""}) << std::endl;
     exit(0);
@@ -20,9 +19,8 @@ int main(int argc, char *argv[]) {
     exit(0);
   }
 
-  Pistache::Port port(result["port"].as<int>());
-  Pistache::Address addr(Pistache::Ipv4::any(), port);
-  white::http::Server server(addr);
+  const auto port = result["port"].as<int>();
+  white::http::Server server(port);
 
   server.init();
   server.start();

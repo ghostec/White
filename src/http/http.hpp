@@ -6,30 +6,32 @@ namespace white::http {
 
 class Http {
   public:
-    Http(Pistache::Address addr)
-      : httpEndpoint(std::make_shared<Pistache::Http::Endpoint>(addr)) {}
+    Http(const int port) {
+      Pistache::Address addr(Pistache::Ipv4::any(), Pistache::Port(port));
+      m_endpoint = std::make_shared<Pistache::Http::Endpoint>(addr);
+    }
 
-    void init(size_t thr = 2) {
+    void init(const size_t thr = 2) {
       auto opts =
         Pistache::Http::Endpoint::options()
         .threads(thr)
         .flags(Pistache::Tcp::Options::InstallSignalHandler);
-      httpEndpoint->init(opts);
+      m_endpoint->init(opts);
       setupRoutes();
     }
 
     void start() {
-      httpEndpoint->setHandler(router.handler());
-      httpEndpoint->serve();
+      m_endpoint->setHandler(router.handler());
+      m_endpoint->serve();
     }
 
     void shutdown() {
-      httpEndpoint->shutdown();
+      m_endpoint->shutdown();
     }
 
   protected:
     virtual void setupRoutes() = 0;
-    std::shared_ptr<Pistache::Http::Endpoint> httpEndpoint;
+    std::shared_ptr<Pistache::Http::Endpoint> m_endpoint;
     Pistache::Rest::Router router;
 };
 
