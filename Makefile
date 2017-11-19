@@ -1,4 +1,4 @@
-build:
+docker-build:
 	@docker build -t white .
 
 server:

@@ -17,7 +17,7 @@ class Http {
         .threads(thr)
         .flags(Pistache::Tcp::Options::InstallSignalHandler);
       m_endpoint->init(opts);
-      setupRoutes();
+      setup_routes();
     }
 
     void start() {
@@ -30,7 +30,7 @@ class Http {
     }
 
   protected:
-    virtual void setupRoutes() = 0;
+    virtual void setup_routes() = 0;
     std::shared_ptr<Pistache::Http::Endpoint> m_endpoint;
     Pistache::Rest::Router router;
 };

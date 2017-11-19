@@ -9,4 +9,8 @@ RUN git clone https://github.com/jarro2783/cxxopts.git; \
   cd cxxopts; mkdir build; cd build; \
   cmake -DCMAKE_BUILD_TYPE=Release ..; \
   make; sudo make install;
+RUN git clone https://github.com/Tencent/rapidjson.git; \
+  cd rapidjson; mkdir build; cd build; \
+  cmake -DCMAKE_BUILD_TYPE=Release ..; \
+  make; sudo make install;
 EXPOSE 9080
